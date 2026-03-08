@@ -1,7 +1,4 @@
 # EPUB-Auto-Repair-Tool
-
-# EPUB Auto Repair Tool
-
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
