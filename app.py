@@ -39,7 +39,7 @@ st.markdown("""
     
     .slogan {
         text-align: center;
-        color: #7F8C8D;
+        color: #CCCCCC;
         font-size: 1.1rem;
         margin-bottom: 2rem;
     }
@@ -94,10 +94,15 @@ st.markdown("""
     }
     
     .card-desc {
-        color: #A0A0A0;
+        color: #D0D0D0;
         font-size: 0.95rem;
         line-height: 1.5;
         max-width: 240px;
+    }
+
+    /* Global Caption & Small Text Override */
+    [data-testid="stCaptionContainer"], .stCaption, small {
+        color: #BBBBBB !important;
     }
 
     /* Streamlit Component Overrides */
@@ -138,6 +143,69 @@ st.markdown("""
         border: 1px solid #333 !important;
         border-radius: 5px !important;
     }
+
+    /* sidebar */
+    [data-testid="stSidebar"] {
+        background-color: #0E1117 !important;
+        border-right: 1px solid #222 !important;
+    }
+    [data-testid="stSidebar"] * {
+        color: #E0E0E0 !important;
+    }
+    [data-testid="stSidebar"] .st-emotion-cache-16idsys p {
+        color: #00FFA3 !important; /* Navigation headers */
+    }
+
+    /* File Uploader Contrast (Light background -> Dark text) */
+    [data-testid="stFileUploader"] {
+        background-color: #F0F2F6 !important;
+        border-radius: 10px !important;
+        padding: 10px !important;
+    }
+    [data-testid="stFileUploader"] section {
+        background-color: transparent !important;
+    }
+    [data-testid="stFileUploader"] label, 
+    [data-testid="stFileUploader"] div, 
+    [data-testid="stFileUploader"] span, 
+    [data-testid="stFileUploader"] p,
+    [data-testid="stFileUploader"] small {
+        color: #000000 !important;
+    }
+
+    /* Notifications Contrast */
+    [data-testid="stNotification"] {
+        background-color: #1A1C23 !important;
+        border: 1px solid #00FFA3 !important;
+        color: #FFFFFF !important;
+    }
+    [data-testid="stNotification"] p, [data-testid="stNotification"] div, [data-testid="stNotification"] span {
+        color: #FFFFFF !important;
+    }
+
+    /* Widget Labels & Radio options */
+    [data-testid="stWidgetLabel"] p, [data-testid="stWidgetLabel"] span {
+        color: #00FFA3 !important; /* Neon Green for labels */
+        font-weight: 700 !important;
+    }
+    [data-testid="stRadio"] label p {
+        color: #FFFFFF !important; /* White for options */
+    }
+
+    /* Progress Log Area */
+    .log-container {
+        background-color: #000;
+        border: 1px solid #222;
+        border-radius: 8px;
+        padding: 15px;
+        font-family: 'Monaco', 'Consolas', monospace;
+        font-size: 0.85rem;
+        color: #00FFA3;
+        margin-top: 20px;
+        max-height: 300px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -147,6 +215,14 @@ if 'app_mode' not in st.session_state:
 
 def set_mode(mode):
     st.session_state.app_mode = mode
+
+def ui_log(msg, placeholder):
+    """UI에 실시간 로그 출력"""
+    if 'log_history' not in st.session_state:
+        st.session_state.log_history = []
+    st.session_state.log_history.append(msg)
+    log_text = "\n".join(st.session_state.log_history)
+    placeholder.markdown(f'<div class="log-container">{log_text}</div>', unsafe_allow_html=True)
 
 # --- UI Header ---
 if st.session_state.app_mode == 'Home':
@@ -231,11 +307,20 @@ elif st.session_state.app_mode == 'Repair':
             repairer = EPUBRepairer()
             results = []
             progress_bar = st.progress(0)
+            log_placeholder = st.empty()
+            st.session_state.log_history = []  # Reset logs
             
+            def log_callback(msg):
+                ui_log(msg, log_placeholder)
+
             for idx, uploaded_file in enumerate(uploaded_files):
                 try:
                     input_buffer = io.BytesIO(uploaded_file.getvalue())
-                    output_buffer, changed_count, notes = repairer.process_buffer(input_buffer, uploaded_file.name)
+                    output_buffer, changed_count, notes = repairer.process_buffer(
+                        input_buffer, 
+                        uploaded_file.name,
+                        log_fn=log_callback
+                    )
                     results.append({
                         "name": uploaded_file.name,
                         "buffer": output_buffer,
@@ -318,32 +403,38 @@ elif st.session_state.app_mode == 'Convert':
                     cover_bytes = custom_cover.read()
                     st.image(cover_bytes, width=120)
 
-        if st.button("🚀 Convert to EPUB"):
-            with st.spinner("Creating EPUB..."):
-                try:
-                    final_meta = {
-                        "title": title, "author": author,
-                        "description": st.session_state.meta.get("description", ""),
-                        "publisher": st.session_state.meta.get("publisher", "")
-                    }
-                    c_url = st.session_state.meta.get("cover_url") if cover_opt == "Auto Search" else None
-                    c_bytes = cover_bytes if cover_opt == "Custom Upload" else None
-                    
-                    epub_buf = converter.to_epub(text, final_meta, cover_url=c_url, cover_bytes=c_bytes)
-                    st.session_state.epub_result = {"buffer": epub_buf.getvalue(), "filename": f"{title}.epub"}
-                    st.success("🎉 Conversion Success!")
-                except Exception as e:
-                    st.error(f"Error: {e}")
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("🚀 Generate EPUB", key="do_convert", use_container_width=True):
+            log_placeholder = st.empty()
+            st.session_state.log_history = []
+            
+            def log_callback(msg):
+                ui_log(msg, log_placeholder)
+
+            try:
+                final_meta = {
+                    "title": title, "author": author,
+                    "description": st.session_state.meta.get("description", ""),
+                    "publisher": st.session_state.meta.get("publisher", "")
+                }
+                c_url = st.session_state.meta.get("cover_url") if cover_opt == "Auto Search" else None
+                c_bytes = cover_bytes if cover_opt == "Custom Upload" else None
+                
+                epub_buf = converter.to_epub(text, final_meta, cover_url=c_url, cover_bytes=c_bytes, log_fn=log_callback)
+                st.session_state.epub_result = {"buffer": epub_buf.getvalue(), "filename": f"{title}.epub"}
+                st.success("🎉 Conversion Success!")
+            except Exception as e:
+                st.error(f"Error: {e}")
 
         if "epub_result" in st.session_state:
             res = st.session_state.epub_result
-            st.download_button("📦 Download Result", res["buffer"], res["filename"], "application/epub+zip")
+            st.download_button("📦 Download Result", res["buffer"], res["filename"], "application/epub+zip", use_container_width=True)
 
 # --- Footer ---
 st.markdown("<br><br>", unsafe_allow_html=True)
 st.markdown(
     """
-    <div style='text-align: center; color: #444; font-size: 0.8rem; border-top: 1px solid #222; padding-top: 20px;'>
+    <div style='text-align: center; color: #999; font-size: 0.8rem; border-top: 1px solid #222; padding-top: 20px;'>
         🛡️ <b>EPUB Master v2.1</b> | Made by chris | <a href='https://github.com/chuchupd/EPUB-Auto-Repair-Tool' target='_blank' style='color: #00FFA3; text-decoration: none;'>GitHub</a>
     </div>
     """,

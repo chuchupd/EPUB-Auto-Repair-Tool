@@ -4,7 +4,17 @@
 
 ---
 
-## 💎 v2.1 (Master Edit) - 2026-03-08
+## 🍱 v2.2 (The Google Books Master) - 2026-03-08
+**"구글 북스 호환성의 완성: EPUB 3.0 정밀 현대화"**
+
+- **내부 정밀 현대화**:
+    - 폰트 MIME 타입 표준화 (`font/ttf`)
+    - `nav.xhtml`의 Spine `linear="no"` 설정으로 독서 흐름 최적화
+    - `dcterms:modified` 등 EPUB 3 전용 메타데이터 속성 방식 적용
+- **ZIP 인프라 강화**: `ZipInfo` 제어를 통한 `mimetype` 규격 엄수 및 가비지(.DS_Store 등) 필터링
+- **포렌식 검증**: 원본 데이터 보존 및 압축 효율 최적화 로직 탑재
+
+## 🍱 v2.1 (Master Edit) - 2026-03-08
 **"브랜드의 완성: EPUB Master 리뉴얼"**
 
 - **브랜드 통합**: 프로젝트 명칭을 `EPUB Master`로 변경 및 로고/아이콘(💎) 적용

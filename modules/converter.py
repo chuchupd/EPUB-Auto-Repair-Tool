@@ -8,7 +8,7 @@ import requests
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 from .core import (
-    create_epub, XML_NAMESPACES
+    create_epub, XML_NAMESPACES, create_nav_xhtml, upgrade_to_html5
 )
 
 class TXTToEPUBConverter:
@@ -71,9 +71,13 @@ class TXTToEPUBConverter:
             print(f"  - 표지 검색 중 오류: {e}")
         return None
 
-    def to_epub(self, text, metadata, cover_url=None, cover_bytes=None):
+    def to_epub(self, text, metadata, cover_url=None, cover_bytes=None, log_fn=None):
         """TXT를 EPUB으로 변환 (메모리 버퍼 반환)"""
-        print(f"\n[Convert] EPUB 변환 시작 (Ver 1.7 - Hybrid Compatibility) | 크기: {len(text)}자", flush=True)
+        def log(msg):
+            if log_fn: log_fn(msg)
+            print(msg, flush=True)
+
+        log(f"\n[Convert] EPUB 변환 시작 (Ver 1.7 - Hybrid Compatibility) | 크기: {len(text)}자")
         output_buffer = io.BytesIO()
         book_id = f"urn:uuid:{uuid.uuid4()}"
         iso_now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -83,11 +87,10 @@ class TXTToEPUBConverter:
             root = Path(tmpdir)
             (root / "OEBPS" / "images").mkdir(parents=True, exist_ok=True)
             
-            # 1. mimetype 파일
-            (root / "mimetype").write_text("application/epub+zip", encoding="utf-8")
+            # 1. (생략) mimetype은 create_epub에서 자동 생성 및 관리함
 
             # 2. 스타일시트
-            print("  - 스타일시트 (style.css) 생성 중...", flush=True)
+            log("  - 스타일시트 (style.css) 생성 중...")
             css = '''body { font-family: sans-serif; line-height: 1.6; margin: 5%; text-align: justify; }
 h1, h2 { text-align: center; margin-top: 10%; }
 .chapter { page-break-before: always; }
@@ -96,7 +99,7 @@ img { max-width: 100%; height: auto; }'''
 
             # 3. 본문 처리 및 XHTML 분할
             lines = text.splitlines()
-            print(f"  - 총 {len(lines)}개 라인 처리 및 5000라인 단위 분할 시작...", flush=True)
+            log(f"  - 총 {len(lines)}개 라인 처리 및 5000라인 단위 분할 시작...")
             
             chapter_files = []
             chunk_size = 5000
@@ -122,39 +125,41 @@ img { max-width: 100%; height: auto; }'''
                         content.append(f'<p>{html.escape(line)}</p>')
                 
                 content.append('</body></html>')
-                (root / "OEBPS" / fname).write_text('\n'.join(content), encoding="utf-8")
-                chapter_files.append(fname)
-                print(f"    ... {min(i+chunk_size, len(lines))}/{len(lines)} 라인 처리 완료 ({fname})", flush=True)
+                content_str = '\n'.join(content)
+                content_str = upgrade_to_html5(content_str)
+                (root / "OEBPS" / fname).write_text(content_str, encoding="utf-8")
+                chapter_files.append({"label": f"Chapter {ch_idx}", "href": fname})
+                log(f"    ... {min(i+chunk_size, len(lines))}/{len(lines)} 라인 처리 중 ({fname})")
 
-            print(f"  - 총 {len(chapter_files)}개 XHTML 파일 생성 완료", flush=True)
+            log(f"  - 총 {len(chapter_files)}개 XHTML 파일 생성 완료")
 
             # 4. 표지 처리
             has_real_cover = False
             cover_ext = ""
             if cover_bytes:
-                print("  - 직접 업로드된 표지 적용 중...", flush=True)
+                log("  - 직접 업로드된 표지 적용 중...")
                 try:
                     img = Image.open(io.BytesIO(cover_bytes))
                     cover_ext = "jpg"
                     img.convert("RGB").save(root / "OEBPS" / "images" / "cover.jpg", "JPEG", quality=90)
                     has_real_cover = True
                 except Exception as e:
-                    print(f"    => 업로드 표지 처리 오류: {e}", flush=True)
+                    log(f"    => 업로드 표지 처리 오류: {e}")
 
             if not has_real_cover and cover_url:
-                print(f"  - 외부 표지 다운로드 중: {cover_url}", flush=True)
+                log(f"  - 외부 표지 다운로드 중: {cover_url}")
                 try:
                     c_resp = requests.get(cover_url, timeout=10)
                     if c_resp.status_code == 200:
                         (root / "OEBPS" / "images" / "cover.jpg").write_bytes(c_resp.content)
                         has_real_cover = True
                         cover_ext = "jpg"
-                        print("    => 표지 다운로드 성공", flush=True)
+                        log("    => 표지 다운로드 성공")
                 except Exception as e:
-                    print(f"    => 표지 다운로드 중 오류: {e}", flush=True)
+                    log(f"    => 표지 다운로드 중 오류: {e}")
 
             if not has_real_cover:
-                print("  - 기본 표지 이미지 (cover.jpg) 생성 중...", flush=True)
+                log("  - 기본 표지 이미지 (cover.jpg) 생성 중...")
                 cover_ext = "jpg"
                 try:
                     img = Image.new('RGB', (600, 800), color=(238, 238, 238))
@@ -173,7 +178,7 @@ img { max-width: 100%; height: auto; }'''
                     draw.text((300, 450), metadata["author"], fill=(102, 102, 102), font=author_font, anchor="mm")
                     img.save(root / "OEBPS" / "images" / "cover.jpg", "JPEG", quality=90)
                 except Exception as e:
-                    print(f"    => JPEG 생성 중 오류 (SVG 대체): {e}", flush=True)
+                    log(f"    => JPEG 생성 중 오류 (SVG 대체): {e}")
                     cover_ext = "svg"
                     svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800">
 <rect width="100%" height="100%" fill="#eeeeee"/>
@@ -183,32 +188,20 @@ img { max-width: 100%; height: auto; }'''
                     (root / "OEBPS" / "images" / "cover.svg").write_text(svg, encoding="utf-8")
 
             # cover.xhtml (Show image)
-            print("  - 표지 페이지 (cover.xhtml) 생성 중...", flush=True)
+            log("  - 표지 페이지 (cover.xhtml) 생성 중...")
             cover_xhtml = f'''<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ko" lang="ko">
 <head><meta charset="utf-8" /><title>Cover</title><style>body {{ margin:0; padding:0; text-align:center; background-color:#eeeeee; }} img {{ max-width:100%; height:auto; display:block; margin:0 auto; }}</style></head>
 <body><div style="height:100vh; display:flex; align-items:center; justify-content:center;"><img src="images/cover.{cover_ext}" alt="Cover Image" /></div></body></html>'''
             (root / "OEBPS" / "cover.xhtml").write_text(cover_xhtml, encoding="utf-8")
 
             # nav.xhtml (EPUB 3)
-            print("  - EPUB 3 Navigation Document (nav.xhtml) 생성 중...", flush=True)
-            nav = [
-                '<?xml version="1.0" encoding="utf-8"?>',
-                '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="ko" lang="ko">',
-                '<head><meta charset="utf-8" /><title>Table of Contents</title></head>',
-                '<body><nav epub:type="toc" id="toc"><h1>목차</h1><ol>'
-            ]
-            for i, fname in enumerate(chapter_files):
-                nav.append(f'<li><a href="{fname}">Chapter {i+1}</a></li>')
-            nav.append('</ol></nav>')
-            nav.append('<nav epub:type="landmarks" id="landmarks" hidden=""><h2>Landmarks</h2><ol>')
-            nav.append('<li><a epub:type="cover" href="cover.xhtml">표지</a></li>')
-            nav.append(f'<li><a epub:type="bodymatter" href="{chapter_files[0]}">본문 시작</a></li>')
-            nav.append('</ol></nav></body></html>')
-            (root / "OEBPS" / "nav.xhtml").write_text('\n'.join(nav), encoding="utf-8")
+            log("  - EPUB 3 Navigation Document (nav.xhtml) 생성 중...")
+            create_nav_xhtml(root, chapter_files, title=metadata["title"])
 
             # toc.ncx (EPUB 2 backward compatibility)
-            print("  - TOC (toc.ncx) 생성 중...", flush=True)
+            log("  - TOC (toc.ncx) 생성 중...")
             ncx = [
                 '<?xml version="1.0" encoding="utf-8"?>',
                 '<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">',
@@ -216,12 +209,13 @@ img { max-width: 100%; height: auto; }'''
                 f'<docTitle><text>{html.escape(metadata["title"])}</text></docTitle>',
                 '<navMap>'
             ]
-            for i, fname in enumerate(chapter_files):
-                ncx.append(f'<navPoint id="navPoint-{i+1}" playOrder="{i+1}"><navLabel><text>Chapter {i+1}</text></navLabel><content src="{fname}"/></navPoint>')
+            for i, item in enumerate(chapter_files):
+                ncx.append(f'<navPoint id="navPoint-{i+1}" playOrder="{i+1}"><navLabel><text>{html.escape(item["label"])}</text></navLabel><content src="{item["href"]}"/></navPoint>')
             ncx.append('</navMap></ncx>')
             (root / "OEBPS" / "toc.ncx").write_text('\n'.join(ncx), encoding="utf-8")
 
             # content.opf
+            log("  - 마스터 설정 (content.opf) 생성 중...")
             opf = [
                 '<?xml version="1.0" encoding="utf-8"?>',
                 '<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="3.0">',
@@ -240,8 +234,8 @@ img { max-width: 100%; height: auto; }'''
                 '    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
                 '    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>'
             ]
-            for i, fname in enumerate(chapter_files):
-                opf.append(f'    <item id="ch{i+1}" href="{fname}" media-type="application/xhtml+xml"/>')
+            for i, item in enumerate(chapter_files):
+                opf.append(f'    <item id="ch{i+1}" href="{item["href"]}" media-type="application/xhtml+xml"/>')
             
             m_type = "image/jpeg" if cover_ext == "jpg" else ("image/png" if cover_ext == "png" else "image/svg+xml")
             opf.append(f'    <item id="cover-image" href="images/cover.{cover_ext}" media-type="{m_type}" properties="cover-image"/>')
@@ -250,16 +244,18 @@ img { max-width: 100%; height: auto; }'''
             opf.append('    <itemref idref="cover-page"/>')
             for i in range(len(chapter_files)):
                 opf.append(f'    <itemref idref="ch{i+1}"/>')
-            opf.append('    <itemref idref="nav"/>')
+            # EPUB 3 nav는 읽기 순서(linear)에서 제외하는 것이 독서 흐름에 좋음
+            opf.append('    <itemref idref="nav" linear="no"/>')
             opf.append('  </spine>')
             opf.append('  <guide><reference type="cover" title="Cover" href="cover.xhtml"/></guide>')
             opf.append('</package>')
             (root / "OEBPS" / "content.opf").write_text('\n'.join(opf), encoding="utf-8")
 
             # 5. EPUB 압축
-            print("  - EPUB 압축 파일 생성 중...", flush=True)
+            log("  - EPUB 압축 및 최종 버퍼 생성 중...")
             create_epub(root, root / "temp.epub")
             output_buffer.write((root / "temp.epub").read_bytes())
             output_buffer.seek(0)
+            log("[Success] EPUB 변환 작업이 완료되었습니다.")
 
         return output_buffer

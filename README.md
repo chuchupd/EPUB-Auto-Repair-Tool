@@ -8,11 +8,11 @@
 
 ## ✨ 핵심 기능
 
-### 🛠 EPUB Repair (자동 수리 엔진)
-- **표준 규격 준수**: `epubcheck` 기준에 맞춰 파일 구조, 메타데이터, XHTML 문법을 자동 교정합니다.
-- **보안 세정**: 불필요한 스크립트(JS) 및 위험한 HTML 이벤트를 제거하여 뷰어의 안정성을 확보합니다.
-- **이미지 최적화**: 비표준 TIFF 이미지를 호환성이 높은 JPEG로 자동 변환합니다.
-- **식별자 복구**: 누락된 도서 ID(UUID)를 생성하고 OPF 구조를 보정합니다.
+- **EPUB 3.0 Modernization**: 구형 EPUB 2.0 파일을 최신 3.0 규격으로 자동 업그레이드 (Google Books 완벽 호환)
+- **Hybrid Navigation**: EPUB 3 `nav.xhtml`과 EPUB 2 `toc.ncx`를 동시 생성하여 모든 리더기 대응
+- **Pure ZIP Optimization**: `mimetype` 전면 배치 및 가비지 필터링으로 업로드 무결성 확보
+- **Forensic Diagnosis**: 수리 전 검사 보고서 제공 및 이미지/텍스트 구조적 정규화
+- **Rich AI Interface**: Streamlit 기반의 현대적이고 직관적인 UI/UX
 
 ### ✍️ TXT to EPUB (변환 생성 엔진)
 - **스마트 분석**: 텍스트를 분석하여 제목, 저자, 챕터를 자동으로 추출합니다.
@@ -45,9 +45,9 @@ python3 fix_epub.py [대상파일/폴더]
 ---
 
 ## 🍱 아키텍처 (v2.1 Modular)
-- `modules/core.py`: XML 처리 및 공통 유틸리티
-- `modules/repairer.py`: EPUB 수리 전문 클래스
-- `modules/converter.py`: TXT 변환 전문 클래스
+- **[2026-03-08] v2.2 (Standard Upgrade)**: Google Books 호환성을 위한 EPUB 3.0 내부 정밀 현대화 (폰트 MIME, Spine 구조, 메타데이터 속성 방식 개선)
+- **[2026-03-08] v2.1 (Master Repair)**: 진단 리포트 기능 추가 및 EPUB 3.0 기초 구조 업그레이드 로직 도입
+- **[2026-03-08] UI Design**: 고대비 가독성 개선 및 섹션별 인버티드 대비 로직 적용
 - `app.py`: Streamlit 기반 마스터 버전 UI
 
 상세한 버전별 변경 사항은 [history.md](history.md)에서 확인하실 수 있습니다.
