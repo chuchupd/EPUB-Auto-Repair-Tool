@@ -353,52 +353,166 @@ def create_epub(folder: Path, output_path: Path):
             epub.write(p, rel, compress_type=zipfile.ZIP_DEFLATED)
 
 
+class EPUBRepairer:
+    def __init__(self, output_dir=None):
+        self.output_dir = Path(output_dir) if output_dir else None
+
+    def fix_text_content(self, text, suffix):
+        changed = False
+        notes = []
+
+        # NULL byte removal and encoding handling is usually done before this in the current flow
+        # but let's keep the logic consistent.
+        
+        if "&nbsp;" in text:
+            text = text.replace("&nbsp;", "&#160;")
+            changed = True
+
+        if suffix.lower() in XHTML_EXTS:
+            text2, c1 = strip_event_handlers_and_risky_tags(text)
+            if c1:
+                text = text2
+                changed = True
+                notes.append("risky-tag-clean")
+
+            text2, c2 = sanitize_invalid_tags_in_markup(text)
+            if c2:
+                text = text2
+                changed = True
+                notes.append("pseudo-tag-escaped")
+        
+        return text, changed, notes
+
+    def repair_opf(self, opf_path_or_tree):
+        # Implementation adapted from ensure_identifier_in_opf
+        changed = False
+        notes = []
+        try:
+            if isinstance(opf_path_or_tree, Path):
+                tree = ET.parse(opf_path_or_tree)
+            else:
+                tree = opf_path_or_tree
+            
+            root = tree.getroot()
+            metadata = root.find("{*}metadata")
+            if metadata is None:
+                metadata = ET.SubElement(root, "{http://www.idpf.org/2007/opf}metadata")
+                changed = True
+                notes.append("metadata-created")
+
+            pkg_uid = root.attrib.get("unique-identifier", "").strip()
+            identifiers = metadata.findall("{http://purl.org/dc/elements/1.1/}identifier")
+            target = None
+
+            if pkg_uid:
+                for ident in identifiers:
+                    if ident.attrib.get("id") == pkg_uid:
+                        target = ident
+                        break
+
+            if target is None and identifiers:
+                target = identifiers[0]
+                if not target.attrib.get("id"):
+                    target.attrib["id"] = pkg_uid or "bookid"
+                    changed = True
+                    notes.append("identifier-id-added")
+
+            if target is None:
+                target = ET.SubElement(metadata, "{http://purl.org/dc/elements/1.1/}identifier")
+                target.text = f"urn:uuid:{uuid.uuid4()}"
+                target.attrib["id"] = pkg_uid or "bookid"
+                changed = True
+                notes.append("identifier-created")
+
+            if not pkg_uid or target.attrib.get("id") != pkg_uid:
+                root.attrib["unique-identifier"] = target.attrib.get("id", "bookid")
+                changed = True
+                notes.append("unique-identifier-fixed")
+
+            if not (target.text or "").strip():
+                target.text = f"urn:uuid:{uuid.uuid4()}"
+                changed = True
+                notes.append("identifier-value-filled")
+
+            return tree, changed, notes
+        except Exception as e:
+            return None, False, [f"opf-error:{e}"]
+
+    def process_buffer(self, input_buffer, filename):
+        import io
+        notes = []
+        changed_files = 0
+        
+        output_buffer = io.BytesIO()
+        
+        with tempfile.TemporaryDirectory(prefix="epubfix_") as td:
+            root = Path(td)
+            
+            # Save input buffer to temp file to use existing extract_epub
+            temp_input = root / "input.epub"
+            temp_input.write_bytes(input_buffer.read())
+            
+            extract_to = root / "extracted"
+            extract_to.mkdir()
+            extract_epub(temp_input, extract_to)
+
+            if ensure_mimetype(extract_to):
+                notes.append("mimetype-fixed")
+
+            opf_path = find_opf_path(extract_to)
+            if opf_path is None:
+                raise RuntimeError("content.opf not found")
+
+            opf_rel = opf_path.relative_to(extract_to).as_posix()
+            ensure_container_xml(extract_to, opf_rel)
+            notes.append("container-fixed")
+
+            for p in extract_to.rglob("*"):
+                if p.is_file() and p.suffix.lower() in TEXT_EXTS.union(XHTML_EXTS):
+                    text, changed_initial = read_text_lossy(p)
+                    text_fixed, changed_logic, extra = self.fix_text_content(text, p.suffix)
+                    if changed_initial or changed_logic:
+                        write_text(p, text_fixed)
+                        changed_files += 1
+                        notes.extend(f"{p.name}:{x}" for x in extra)
+
+            tree, opf_changed, opf_notes = self.repair_opf(opf_path)
+            if opf_changed:
+                tree.write(opf_path, encoding="utf-8", xml_declaration=True)
+                changed_files += 1
+            notes.extend(opf_notes)
+
+            tiff_changed, tiff_notes = try_convert_tiffs(extract_to)
+            if tiff_changed:
+                changed_files += 1
+            notes.extend(tiff_notes)
+
+            # Re-verify XHTML files after possible TIFF conversion updates
+            for p in extract_to.rglob("*"):
+                if p.is_file() and p.suffix.lower() in XHTML_EXTS:
+                    changed, extra = clean_text_file(p)
+                    if changed:
+                        changed_files += 1
+                        notes.extend(f"{p.name}:{x}" for x in extra)
+
+            # Create EPUB in memory-like way or just to a temp and read back
+            temp_output = root / "output.epub"
+            create_epub(extract_to, temp_output)
+            output_buffer.write(temp_output.read_bytes())
+            output_buffer.seek(0)
+
+        return output_buffer, changed_files, notes
+
+
 def process_one(epub_path: Path):
-    notes = []
-    changed_files = 0
-
-    with tempfile.TemporaryDirectory(prefix="epubfix_") as td:
-        root = Path(td)
-        extract_epub(epub_path, root)
-
-        if ensure_mimetype(root):
-            notes.append("mimetype-fixed")
-
-        opf_path = find_opf_path(root)
-        if opf_path is None:
-            raise RuntimeError("content.opf not found")
-
-        opf_rel = opf_path.relative_to(root).as_posix()
-        ensure_container_xml(root, opf_rel)
-        notes.append("container-fixed")
-
-        for p in root.rglob("*"):
-            if p.is_file() and p.suffix.lower() in TEXT_EXTS.union(XHTML_EXTS):
-                changed, extra = clean_text_file(p)
-                if changed:
-                    changed_files += 1
-                    notes.extend(f"{p.name}:{x}" for x in extra)
-
-        opf_changed, opf_notes = ensure_identifier_in_opf(opf_path)
-        if opf_changed:
-            changed_files += 1
-        notes.extend(opf_notes)
-
-        tiff_changed, tiff_notes = try_convert_tiffs(root)
-        if tiff_changed:
-            changed_files += 1
-        notes.extend(tiff_notes)
-
-        for p in root.rglob("*"):
-            if p.is_file() and p.suffix.lower() in TEXT_EXTS.union(XHTML_EXTS):
-                changed, extra = clean_text_file(p)
-                if changed:
-                    changed_files += 1
-                    notes.extend(f"{p.name}:{x}" for x in extra)
-
-        out_path = OUTPUT_DIR / epub_path.name
-        create_epub(root, out_path)
-
+    repairer = EPUBRepairer(output_dir=OUTPUT_DIR)
+    with open(epub_path, "rb") as f:
+        out_buffer, changed_files, notes = repairer.process_buffer(f, epub_path.name)
+        
+    out_path = OUTPUT_DIR / epub_path.name
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_bytes(out_buffer.read())
+    
     return out_path, changed_files, notes
 
 
@@ -425,6 +539,8 @@ def main():
             print(f"[OK] {epub.name} -> {out_path.name} | changed_files={changed_files}" + (f" | {summary}" if summary else ""))
             success += 1
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"[FAIL] {epub.name} -> {e}")
             fail += 1
 
