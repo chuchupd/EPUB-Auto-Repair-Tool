@@ -1,0 +1,56 @@
+# EPUB Master - Git Ignore
+
+# Python Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Private & Personal
+private/
+.resolved
+.agents/
+.agent/
+_agents/
+_agent/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Streamlit & Tools
+.streamlit/
+epubcheck-5.3.0/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test Files
+broken_test.epub
+repaired_test.epub
+input/
+output/
