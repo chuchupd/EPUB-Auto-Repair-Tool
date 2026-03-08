@@ -1,235 +1,61 @@
+# 💎 EPUB Master
 
-# EPUB Auto Repair Tool
+**수리부터 변환까지, 당신의 완벽한 EPUB 솔루션**
 
-![Python](https://img.shields.io/badge/python-3.8%2B-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
-
-A Python script that automatically repairs common structural and XHTML problems in EPUB files so they can pass strict publishing platform validation.
-
-출판 플랫폼 업로드 시 발생하는 **EPUB 구조 오류와 XHTML 오류를 자동으로 수정하는 Python 스크립트**입니다.
-
-이 도구는 다음과 같은 환경에서 생성된 EPUB 파일을 복구하기 위해 만들어졌습니다.
-
-- PDF → EPUB 변환
-- OCR 파이프라인
-- 오래된 ebook 제작 도구
-- 깨진 EPUB export
-
-이러한 과정에서 종종 **잘못된 XHTML 태그, 깨진 메타데이터, 지원되지 않는 리소스**가 발생하며 업로드가 실패합니다.  
-이 스크립트는 이러한 문제를 자동으로 수정합니다.
+`EPUB Master`는 손상된 EPUB 파일을 복구하고, 일반 텍스트(TXT) 파일을 고품질 정체 EPUB으로 변환하는 올인원 도구입니다. 전문가 수준의 아키텍처와 세련된 블랙 & 그린 UI를 통해 최상의 사용자 경험을 제공합니다.
 
 ---
 
-# Features / 주요 기능
+## ✨ 핵심 기능
 
-## 1. Broken XHTML Tag Repair  
-## 깨진 XHTML 태그 자동 복구
+### 🛠 EPUB Repair (자동 수리 엔진)
+- **표준 규격 준수**: `epubcheck` 기준에 맞춰 파일 구조, 메타데이터, XHTML 문법을 자동 교정합니다.
+- **보안 세정**: 불필요한 스크립트(JS) 및 위험한 HTML 이벤트를 제거하여 뷰어의 안정성을 확보합니다.
+- **이미지 최적화**: 비표준 TIFF 이미지를 호환성이 높은 JPEG로 자동 변환합니다.
+- **식별자 복구**: 누락된 도서 ID(UUID)를 생성하고 OPF 구조를 보정합니다.
 
-Some EPUB generators accidentally insert text that looks like XML tags, breaking the document.
-
-일부 EPUB 생성기는 **본문 텍스트를 XML 태그처럼 잘못 삽입**하여 문서를 깨뜨립니다.
-
-Example:
-
-```
-<IRA___ ...>
-<Beati pauperes="" ...>
-<MI5 ...>
-<per ardua="" ...>
-```
-
-The script automatically escapes these so they become plain text instead of invalid tags.
-
-스크립트는 이러한 가짜 태그를 자동으로 **텍스트로 escape 처리**하여 XML 구조 오류를 방지합니다.
+### ✍️ TXT to EPUB (변환 생성 엔진)
+- **스마트 분석**: 텍스트를 분석하여 제목, 저자, 챕터를 자동으로 추출합니다.
+- **표지 자동 검색**: Google Books 및 Open Library API를 연동하여 도서 정보를 찾고 표지를 매칭합니다.
+- **하이브리드 호환성**: 구글 북스 및 다양한 이북 리더기를 위해 최적화된 JPEG 표지와 가이드 태그를 생성합니다.
+- **고음질 생성**: 5,000라인 단위 분할 및 전문적인 CSS 스타일링을 적용합니다.
 
 ---
 
-## 2. NULL Byte Removal  
-## NULL 바이트 제거
+## 🚀 시작하기
 
-Removes `0x00` NULL bytes often introduced during OCR or PDF conversions.
-
-OCR이나 PDF 변환 과정에서 종종 삽입되는 `0x00` NULL 바이트를 제거합니다.
-
-These bytes frequently break XML parsers used by publishing platforms.
-
-이 바이트는 많은 출판 플랫폼의 XML 파서를 깨뜨립니다.
-
----
-
-## 3. HTML Entity Fix  
-## HTML 엔티티 수정
-
-Converts
-
-```
-&nbsp;
+### 1단계: 설치
+```bash
+git clone https://github.com/chuchupd/EPUB-Auto-Repair-Tool.git
+cd EPUB-Auto-Repair-Tool
+pip install -r requirements.txt
 ```
 
-into XHTML-safe
-
-```
-&#160;
-```
-
-XHTML 표준과 호환되도록 HTML 엔티티를 수정합니다.
-
----
-
-## 4. Metadata Repair  
-## 메타데이터 자동 복구
-
-Automatically repairs or creates required metadata inside `content.opf`.
-
-`content.opf` 내부의 필수 메타데이터를 자동으로 수정합니다.
-
-- `dc:identifier`
-- `unique-identifier`
-
----
-
-## 5. Dangerous Tag Cleanup  
-## 위험 태그 제거
-
-Removes unsupported tags that may break readers or upload validators.
-
-전자책 리더나 업로드 검증을 깨뜨릴 수 있는 태그를 제거합니다.
-
-Removed tags:
-
-- `<script>`
-- `<form>`
-- `<button>`
-- inline JavaScript events
-
----
-
-## 6. TIFF Image Conversion (Optional)  
-## TIFF 이미지 자동 변환 (선택)
-
-If `Pillow` is installed the script converts:
-
-Pillow 라이브러리가 설치된 경우
-
-```
-.tif
-.tiff
+### 2단계: 실행
+**웹 UI 모드 (추천)**
+```bash
+python3 -m streamlit run app.py
 ```
 
-images into
-
-```
-.jpg
-```
-
-TIFF 이미지를 JPG로 변환하고 EPUB 내부 참조를 업데이트합니다.
-
----
-
-## 7. EPUB Repackaging  
-## EPUB 재패키징
-
-Rebuilds the EPUB archive to follow the EPUB specification.
-
-EPUB 규격에 맞게 ZIP 구조를 다시 생성합니다.
-
-- `mimetype` must be the **first file**
-- `mimetype` must be **uncompressed**
-- correct ZIP structure
-
----
-
-# Folder Structure / 폴더 구조
-
-```
-project/
-│
-├─ fix_epub.py
-│
-├─ inputs/
-│   ├─ book1.epub
-│   ├─ book2.epub
-│
-└─ outputs/
+**터미널 모드 (대량 처리)**
+```bash
+python3 fix_epub.py [대상파일/폴더]
 ```
 
 ---
 
-# Usage / 사용 방법
+## 🍱 아키텍처 (v2.1 Modular)
+- `modules/core.py`: XML 처리 및 공통 유틸리티
+- `modules/repairer.py`: EPUB 수리 전문 클래스
+- `modules/converter.py`: TXT 변환 전문 클래스
+- `app.py`: Streamlit 기반 마스터 버전 UI
 
-Run the script:
-
-스크립트를 실행합니다.
-
-```
-python3 fix_epub.py
-```
-
-All EPUB files inside `inputs/` will be processed.
-
-`inputs/` 폴더 안의 모든 EPUB 파일이 자동으로 처리됩니다.
-
-Repaired EPUB files will appear in:
-
-수정된 EPUB 파일은 다음 위치에 생성됩니다.
-
-```
-outputs/
-```
-
-Example output:
-
-```
-[OK] book.epub -> book.epub | changed_files=5
-```
+상세한 버전별 변경 사항은 [history.md](history.md)에서 확인하실 수 있습니다.
 
 ---
 
-# Optional Dependency / 선택 의존성
-
-To enable TIFF conversion:
-
-TIFF 변환 기능을 사용하려면:
-
-```
-pip install pillow
-```
-
-If Pillow is not installed, TIFF conversion will be skipped.
-
-설치되지 않은 경우 TIFF 변환 기능은 자동으로 건너뜁니다.
-
----
-
-# Requirements / 요구 사항
-
-Python 3.8+
-
-Standard libraries:
-
-- zipfile
-- xml.etree
-- pathlib
-- re
-- uuid
-
----
-
-# Typical Problems This Tool Fixes  
-# 해결 가능한 대표 문제
-
-Publishing platform upload failures such as:
-
-다음과 같은 EPUB 업로드 실패 문제를 해결합니다.
-
-- malformed XHTML
-- invalid XML token errors
-- missing identifier metadata
-- unsupported image formats
-- broken EPUB ZIP structure
-
----
-
-# License
-
+## 🛡️ 라이선스
 MIT License
+
+---
+**Made with ❤️ for Readers & Publishers** | Enhanced by Lindor Persona
