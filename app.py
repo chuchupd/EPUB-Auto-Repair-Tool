@@ -55,53 +55,70 @@ st.markdown("""
     .nav-card {
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(0, 255, 163, 0.2);
-        border-radius: 15px;
-        padding: 40px;
-        width: 300px;
+        border-bottom: none; /* Join with button */
+        border-radius: 15px 15px 0 0;
+        padding: 40px 20px;
+        width: 100%;
         text-align: center;
         transition: all 0.4s ease;
-        cursor: pointer;
         backdrop-filter: blur(10px);
+        min-height: 250px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
     }
     
     .nav-card:hover {
-        transform: translateY(-10px);
         border-color: #00FFA3;
-        box-shadow: 0 10px 30px rgba(0, 255, 163, 0.15);
         background: rgba(0, 255, 163, 0.05);
     }
     
+    /* Eliminate Streamlit's default gap between elements */
+    [data-testid="stVerticalBlock"] > div:has(.nav-card) + div {
+        margin-top: -1rem !important;
+    }
+    
     .icon {
-        font-size: 3rem;
-        margin-bottom: 15px;
+        font-size: 3.5rem;
+        margin-bottom: 20px;
+        filter: drop-shadow(0 0 10px rgba(0, 255, 163, 0.3));
     }
     
     .card-title {
         color: #00FFA3;
-        font-size: 1.5rem;
-        font-weight: bold;
-        margin-bottom: 10px;
+        font-size: 1.6rem;
+        font-weight: 800;
+        margin-bottom: 12px;
+        letter-spacing: -0.5px;
     }
     
     .card-desc {
-        color: #888;
-        font-size: 0.9rem;
+        color: #A0A0A0;
+        font-size: 0.95rem;
+        line-height: 1.5;
+        max-width: 240px;
     }
 
     /* Streamlit Component Overrides */
     .stButton>button {
-        background-color: transparent !important;
+        background-color: rgba(255, 255, 255, 0.03) !important;
         color: #00FFA3 !important;
-        border: 1px solid #00FFA3 !important;
+        border: 1px solid rgba(0, 255, 163, 0.2) !important;
+        border-top: none !important; /* Join with card */
         font-weight: bold !important;
-        border-radius: 8px !important;
+        border-radius: 0 0 15px 15px !important;
+        height: 4rem !important;
         transition: 0.3s !important;
+        width: 100%;
+        font-size: 1.1rem !important;
     }
     
     .stButton>button:hover {
         background-color: #00FFA3 !important;
         color: #0E1117 !important;
-        box-shadow: 0 0 15px rgba(0, 255, 163, 0.4);
+        border-color: #00FFA3 !important;
+        box-shadow: 0 10px 20px rgba(0, 255, 163, 0.2) !important;
     }
 
     /* Dark Mode Inputs */
