@@ -162,7 +162,7 @@ Run the script:
 스크립트를 실행합니다.
 
 ```
-python3 fix_epub_aggressive_tag_escape_batch_fixed.py
+python3 fix_epub.py
 ```
 
 All EPUB files inside `inputs/` will be processed.
