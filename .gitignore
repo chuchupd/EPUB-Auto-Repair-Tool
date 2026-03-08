@@ -55,3 +55,5 @@ broken_test.epub
 repaired_test.epub
 input/
 output/
+tmp_audit/
+tmp_inspect/
