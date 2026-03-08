@@ -230,19 +230,6 @@ Publishing platform upload failures such as:
 
 ---
 
-# Recommended Validation  
-# 추가 검증 권장
-
-For strict validation you may still run:
-
-더 엄격한 검증을 위해 다음 도구 사용을 권장합니다.
-
-```
-epubcheck
-```
-
----
-
 # License
 
 MIT License
