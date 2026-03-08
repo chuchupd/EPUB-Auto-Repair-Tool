@@ -10,8 +10,10 @@
 
 - **EPUB 3.0 Modernization**: 구형 EPUB 2.0 파일을 최신 3.0 규격으로 자동 업그레이드 (Google Books 완벽 호환)
 - **Hybrid Navigation**: EPUB 3 `nav.xhtml`과 EPUB 2 `toc.ncx`를 동시 생성하여 모든 리더기 대응
+- **Nuclear Conversion**: 구글 북스 업로드 실패의 핵심인 비표준 속성(img width%), 커스텀 폰트 의존성, XML 선언부 전면 소거
+- **High-Fidelity Navigation**: NCX 및 XHTML 타이틀 분석을 통한 고정밀 목차 라벨링 (`id0` 등 무의미한 라벨 자동 교정)
+- **Standard Compliance**: 전 파일 Unix LF 및 BOM-free 강제로 최신 이북 파서와의 무결성 확보
 - **Pure ZIP Optimization**: `mimetype` 전면 배치 및 가비지 필터링으로 업로드 무결성 확보
-- **Forensic Diagnosis**: 수리 전 검사 보고서 제공 및 이미지/텍스트 구조적 정규화
 - **Rich AI Interface**: Streamlit 기반의 현대적이고 직관적인 UI/UX
 
 ### ✍️ TXT to EPUB (변환 생성 엔진)
@@ -44,10 +46,10 @@ python3 fix_epub.py [대상파일/폴더]
 
 ---
 
-## 🍱 아키텍처 (v2.1 Modular)
-- **[2026-03-08] v2.2 (Standard Upgrade)**: Google Books 호환성을 위한 EPUB 3.0 내부 정밀 현대화 (폰트 MIME, Spine 구조, 메타데이터 속성 방식 개선)
-- **[2026-03-08] v2.1 (Master Repair)**: 진단 리포트 기능 추가 및 EPUB 3.0 기초 구조 업그레이드 로직 도입
-- **[2026-03-08] UI Design**: 고대비 가독성 개선 및 섹션별 인버티드 대비 로직 적용
+## 🍱 아키텍처 (v2.3 Master)
+- **[2026-03-09] v2.3 (Forensic & Nuclear)**: 구글 북스 최종 승인을 위한 '핵 수리(Nuclear Fix)' 및 '수술적 메타데이터 세정' 도입 (목차 라벨 복구, 비표준 속성 제거)
+- **[2026-03-08] v2.2 (Standard Upgrade)**: Google Books 호환성을 위한 EPUB 3.0 내부 정밀 현대화 (폰트 MIME, Spine 구조 개선)
+- **[2026-03-08] v2.1 (Master Repair)**: 진단 리포트 기능 추가 및 EPUB Master 브랜드 리뉴얼
 - `app.py`: Streamlit 기반 마스터 버전 UI
 
 상세한 버전별 변경 사항은 [history.md](history.md)에서 확인하실 수 있습니다.
