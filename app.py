@@ -344,7 +344,7 @@ st.markdown("<br><br>", unsafe_allow_html=True)
 st.markdown(
     """
     <div style='text-align: center; color: #444; font-size: 0.8rem; border-top: 1px solid #222; padding-top: 20px;'>
-        🛡️ <b>EPUB Master v2.1</b> | Enhanced by Lindor Persona | <a href='https://github.com/chuchupd/EPUB-Auto-Repair-Tool' target='_blank' style='color: #00FFA3; text-decoration: none;'>GitHub</a>
+        🛡️ <b>EPUB Master v2.1</b> | Made by chris | <a href='https://github.com/chuchupd/EPUB-Auto-Repair-Tool' target='_blank' style='color: #00FFA3; text-decoration: none;'>GitHub</a>
     </div>
     """,
     unsafe_allow_html=True
