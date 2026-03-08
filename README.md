@@ -144,7 +144,7 @@ EPUB 규격에 맞게 ZIP 구조를 다시 생성합니다.
 ```
 project/
 │
-├─ fix_epub_aggressive_tag_escape_batch_fixed.py
+├─ fix_epub.py
 │
 ├─ inputs/
 │   ├─ book1.epub
