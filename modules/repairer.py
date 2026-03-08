@@ -138,12 +138,19 @@ class EPUBRepairer:
             if f'id="{cover_id}"' in text and 'properties="cover-image"' not in text:
                 text = re.sub(item_pattern, r'\1 properties="cover-image"', text)
         
-        # 5. 빈 메타데이터 태그 제거 (Google Books 검증 오류 방지)
-        empty_tags = ["dc:subject", "dc:description", "dc:rights", "dc:source", "dc:publisher"]
+        # 5. 빈 메타데이터 태그 및 레거시 항목 제거 (Google Books 검증 오류 방지)
+        empty_tags = ["dc:subject", "dc:description", "dc:rights", "dc:source", "dc:publisher", "dc:type"]
         for tag in empty_tags:
             text = re.sub(f'<{tag}[^>]*>\s*</{tag}>', '', text)
+            text = re.sub(f'<{tag}[^>]*/>', '', text)
             
-        # 6. 불필요한 메타데이터 제거 (PDFePub3 등)
+        # 6. opf:scheme 등 레거시 속성 제거 (EPUB 3.0에서는 meta property 권장)
+        text = re.sub(r'\s+opf:scheme=["\'][^"\']+["\']', '', text)
+        
+        # 7. spine toc="ncx" 속성 제거 (EPUB 3 전용 모드 시도)
+        text = re.sub(r'<spine toc=["\']ncx["\']', '<spine', text)
+        
+        # 8. 불필요한 메타데이터 제거 (PDFePub3 등)
         text = re.sub(r'<meta[^>]*name="PDFePub3 version"[^>]*/>', '', text)
         
         write_text(opf_path, text)
@@ -310,39 +317,97 @@ class EPUBRepairer:
                 write_text(opf_path, opf_text) # 우선 확장자 저장
                 self.upgrade_opf_to_v3(opf_path)
                 
-                # nav.xhtml 생성 및 OPF 등록 (v2.2 Fix: 무조건 재생성하여 깨진 링크 수정)
+                # 4-3. nav.xhtml 생성 및 OPF 등록 (v2.2 Fix: 무조건 재생성하여 깨진 링크 수정)
                 for p in extract_to.rglob("nav.xhtml"): p.unlink()
                 
-                log("  - EPUB 3 내비게이션(nav.xhtml) 정밀 복구 중...")
-                # 1. OPF에서 본문 항목 추출 (regex 개선)
+                log("  - EPUB 3 내비게이션(nav.xhtml) 고정밀 복구 중...")
+                
+                # 1. NCX에서 라벨 맵 추출 (순차적/강력 스캔)
+                ncx_labels: dict[str, str] = {}
+                for f_p in extract_to.rglob("*"):
+                    if f_p.suffix.lower() == ".ncx":
+                        txt = read_text_lossy(f_p)
+                        # navPoint 단위로 분할하여 매칭
+                        for entry in re.split(r'<navPoint', txt, flags=re.I):
+                             t_m = re.search(r'<text[^>]*>([^<]+)</text>', entry, flags=re.I)
+                             s_m = re.search(r'src=["\']([^"#\s\?]+)', entry, flags=re.I)
+                             if t_m and s_m:
+                                 lab, hr = t_m.group(1).strip(), s_m.group(1).strip()
+                                 hr = re.sub(r'\.html?$', '.xhtml', hr, flags=re.I)
+                                 if hr not in ncx_labels: ncx_labels[hr] = lab
+
+                # 2. OPF에서 본문 항목 추출 및 라벨 부여
                 nav_items = []
                 opf_text = read_text_lossy(opf_path)
-                # media-type이 application/xhtml+xml인 모든 항목 찾기 (href 확장자 상관없음)
-                item_pattern = r'<item\s+[^>]*?id="([^"]+)"\s+[^>]*?href="([^"]+)"\s+[^>]*?media-type="application/xhtml\+xml"[^>]*/>'
-                for m in re.finditer(item_pattern, opf_text):
-                    i_id, i_href = m.group(1), m.group(2)
-                    if "nav.xhtml" not in i_href:
-                        nav_items.append({"label": i_id, "href": i_href})
+                # Manifest에서 XHTML 항목을 모두 찾아 라벨 매칭
+                item_tags = re.findall(r'<item\s+[^>]+>', opf_text, flags=re.I)
+                for itag in item_tags:
+                    if 'application/xhtml+xml' not in itag.lower(): continue
+                    id_m = re.search(r'id=["\']([^"\']+)["\']', itag, flags=re.I)
+                    href_m = re.search(r'href=["\']([^"\']+)["\']', itag, flags=re.I)
+                    if id_m and href_m:
+                        i_id, i_href = id_m.group(1), href_m.group(1)
+                        if "nav.xhtml" in i_href: continue
+                        
+                        # 라벨 결정: NCX -> Title -> id_id
+                        label = ncx_labels.get(i_href)
+                        if not label:
+                            full_p = opf_path.parent / i_href
+                            if full_p.exists():
+                                c = read_text_lossy(full_p)
+                                title_m = re.search(r'<title>([^<]+)</title>', c, flags=re.I)
+                                if title_m and title_m.group(1).strip() and title_m.group(1).strip().lower() not in ["chapter", "title"]:
+                                    label = title_m.group(1).strip()
+                        
+                        if not label: label = i_id
+                        nav_items.append({"label": label, "href": i_href})
                 
-                if not nav_items:
-                     # fallback: 폴더 내 본문 파일들 (.xhtml, .html 모두 포함)
-                     for ch_p in sorted(extract_to.rglob("*")):
-                          if ch_p.suffix.lower() in [".xhtml", ".html", ".htm"] and ch_p.name != "nav.xhtml":
-                               # OPF 기준 상대 경로 계산
-                               rel_href = os.path.relpath(ch_p, opf_path.parent)
-                               nav_items.append({"label": ch_p.stem, "href": rel_href})
+                create_nav_xhtml(extract_to, nav_items[:100])
                 
-                create_nav_xhtml(extract_to, nav_items[:100]) # 상위 100개만
-                
-                # OPF에 nav.xhtml 등록 (manifest와 spine)
+                # 3. OPF 메타데이터 "수술적" 세정 (Surgical Purge)
                 opf_text = read_text_lossy(opf_path)
+                m_start = opf_text.find('<metadata')
+                m_end = opf_text.find('</metadata>') + 11
+                if m_start >= 0 and m_end > m_start:
+                    meta_block = opf_text[m_start:m_end]
+                    # 식별자(identifier) 내용만 추출
+                    id_vals = re.findall(r'<dc:identifier[^>]*>(.*?)</dc:identifier>', meta_block, flags=re.S | re.I)
+                    if id_vals:
+                        val = id_vals[0].strip()
+                        clean_id_tag = f'\n    <dc:identifier id="udocid">{val}</dc:identifier>'
+                        # 기존 식별자들 완전 제거
+                        meta_block = re.sub(r'<dc:identifier[^>]*>.*?</dc:identifier>', '', meta_block, flags=re.S | re.I)
+                        # 정제된 식별자 삽입
+                        meta_block = meta_block.replace('</metadata>', clean_id_tag + '\n</metadata>')
+                    
+                    # opf:scheme 및 dc:type 속성/태그 완전 제거
+                    meta_block = re.sub(r'\s+opf:scheme=["\'][^"\']+["\']', '', meta_block)
+                    meta_block = re.sub(r'<dc:type[^>]*>.*?</dc:type>', '', meta_block, flags=re.S | re.I)
+                    opf_text = opf_text[:m_start] + meta_block + opf_text[m_end:]
+
                 if 'id="nav"' not in opf_text:
+                    # manifest에 nav 추가
                     nav_entry = '    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>'
                     opf_text = re.sub(r'(<manifest[^>]*>)', r'\1\n' + nav_entry, opf_text)
-                    
-                    # spine에 nav 추가 (마지막, linear="no" 설정으로 독서 흐름 방해 방지)
+                    # spine에 nav 추가
                     opf_text = re.sub(r'(</spine>)', r'    <itemref idref="nav" linear="no"/>\n\1', opf_text)
-                    write_text(opf_path, opf_text)
+                
+                # 중복 및 잔여 opf:scheme 최종 제거 (전역)
+                opf_text = re.sub(r'\s+opf:scheme=["\'][^"\']+["\']', '', opf_text)
+                write_text(opf_path, opf_text)
+
+                # 4. nav.xhtml 내의 "id0" 등 무의미한 라벨 최종 교정 (Brute Force)
+                for p_nav in extract_to.rglob("nav.xhtml"):
+                    nav_c = read_text_lossy(p_nav)
+                    # id0, id1... 패턴을 찾아 파일명으로라도 대체 시도 (id0 -> 0.xhtml)
+                    def nav_label_repl(m):
+                        hr, lab = m.group(1), m.group(2)
+                        if lab.startswith("id") and lab[2:].isdigit():
+                            new_lab = hr.replace(".xhtml", "")
+                            return f'href="{hr}">{new_lab}</a>'
+                        return m.group(0)
+                    nav_c = re.sub(r'href=["\']([^"\']+)["\']>([^<]+)</a>', nav_label_repl, nav_c)
+                    write_text(p_nav, nav_c)
 
                 # 4-4. toc.ncx 동기화 (v2.2 Fix: 하위 호환성 파일도 확장자 최신화, 앵커 대응)
                 for ncx_p in extract_to.rglob("*.ncx"):

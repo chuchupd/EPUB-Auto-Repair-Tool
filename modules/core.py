@@ -28,8 +28,14 @@ def read_text_lossy(path: Path):
     return path.read_bytes().decode("utf-8", errors="replace")
 
 def write_text(path: Path, text: str):
+    """BOM 제거 및 Unix 스타일(LF) 줄바꿈으로 통일하여 저장"""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    if text.startswith('\ufeff'):
+        text = text[1:]
+    # CRLF를 LF로 통일
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+    with path.open("w", encoding="utf-8", newline='\n') as f:
+        f.write(text)
 
 def try_parse_xml_string(text: str):
     try:
@@ -89,6 +95,17 @@ def upgrade_to_html5(text: str):
     text = re.sub(r'<meta[^>]*http-equiv=["\']Content-Type["\'][^>]*>', '', text, flags=re.I)
     if '<head>' in text and 'charset="utf-8"' not in text:
         text = text.replace('<head>', '<head>\n<meta charset="utf-8"/>', 1)
+
+    # 4-1. Title 보강 (빈 제목 방지)
+    title_match = re.search(r'<title>([^<]*)</title>', text, flags=re.I)
+    if title_match:
+        if not title_match.group(1).strip():
+            # h1이 있으면 추출
+            h1_match = re.search(r'<h1[^>]*>([^<]+)</h1>', text, flags=re.I)
+            new_title = h1_match.group(1).strip() if h1_match else "Chapter"
+            text = text.replace(title_match.group(0), f'<title>{new_title}</title>')
+    elif '<head>' in text:
+        text = text.replace('<head>', '<head>\n<title>Chapter</title>', 1)
 
     # 5. 레거시 속성 정밀 교정 (Google Books 호환성 핵심)
     # img 태그의 width, height % 단위를 style로 이동 (HTML5 규격 위반 해결)

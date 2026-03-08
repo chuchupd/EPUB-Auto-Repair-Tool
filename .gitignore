@@ -13,6 +13,7 @@ private/
 .agent/
 _agents/
 _agent/
+history.md
 
 # Python
 __pycache__/
