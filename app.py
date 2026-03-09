@@ -238,7 +238,7 @@ else:
     with col_title:
         st.markdown(f"<h1>💎 EPUB Master</h1>", unsafe_allow_html=True)
 
-st.sidebar.caption("v2.1 (Master Edit Active)")
+st.sidebar.caption("v2.3.5 (Dual-Mode Active)")
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🛠 Navigation")
 if st.sidebar.button("🏠 Home Screen"):
@@ -295,6 +295,15 @@ elif st.session_state.app_mode == 'Repair':
     st.subheader("🛠 EPUB Auto Repair")
     st.info("복구가 필요한 EPUB 파일을 업로드하세요. 오류를 분석하여 최신 규격으로 자동 교정합니다.")
     
+    col_opt, _ = st.columns([1, 1])
+    with col_opt:
+        repair_version = st.radio(
+            "Target Format", 
+            ["EPUB 3.0 (Modern)", "EPUB 2.0 (Legacy)"],
+            help="3.0은 최신 표준이며 구글 북스에 최적화되어 있습니다. 2.0은 구형 리더기 호환성이 높습니다."
+        )
+        target_v = "3.0" if "3.0" in repair_version else "2.0"
+
     uploaded_files = st.file_uploader(
         "Upload EPUB files",
         type=["epub"],
@@ -319,6 +328,7 @@ elif st.session_state.app_mode == 'Repair':
                     output_buffer, changed_count, notes = repairer.process_buffer(
                         input_buffer, 
                         uploaded_file.name,
+                        target_version=target_v,
                         log_fn=log_callback
                     )
                     results.append({
@@ -351,6 +361,15 @@ elif st.session_state.app_mode == 'Convert':
     st.subheader("✍️ TXT to EPUB Conversion")
     st.info("TXT 파일을 업로드하면 도서 정보를 분석하고 규격에 맞는 고품질 EPUB을 생성합니다.")
     
+    col_opt, _ = st.columns([1, 1])
+    with col_opt:
+        convert_version = st.radio(
+            "Target Format", 
+            ["EPUB 3.0 (Guaranteed for Google Books)", "EPUB 2.0 (Max Compatibility)"],
+            index=0
+        )
+        target_v_conv = "3.0" if "3.0" in convert_version else "2.0"
+
     txt_file = st.file_uploader("Upload TXT file", type=["txt"], key="txt_uploader")
     
     if txt_file:
@@ -420,7 +439,7 @@ elif st.session_state.app_mode == 'Convert':
                 c_url = st.session_state.meta.get("cover_url") if cover_opt == "Auto Search" else None
                 c_bytes = cover_bytes if cover_opt == "Custom Upload" else None
                 
-                epub_buf = converter.to_epub(text, final_meta, cover_url=c_url, cover_bytes=c_bytes, log_fn=log_callback)
+                epub_buf = converter.to_epub(text, final_meta, cover_url=c_url, cover_bytes=c_bytes, version=target_v_conv, log_fn=log_callback)
                 st.session_state.epub_result = {"buffer": epub_buf.getvalue(), "filename": f"{title}.epub"}
                 st.success("🎉 Conversion Success!")
             except Exception as e:
@@ -435,7 +454,7 @@ st.markdown("<br><br>", unsafe_allow_html=True)
 st.markdown(
     """
     <div style='text-align: center; color: #999; font-size: 0.8rem; border-top: 1px solid #222; padding-top: 20px;'>
-        🛡️ <b>EPUB Master v2.1</b> | Made by chris | <a href='https://github.com/chuchupd/EPUB-Auto-Repair-Tool' target='_blank' style='color: #00FFA3; text-decoration: none;'>GitHub</a>
+        🛡️ <b>EPUB Master v2.3.5</b> | Made by chris | <a href='https://github.com/chuchupd/EPUB-Auto-Repair-Tool' target='_blank' style='color: #00FFA3; text-decoration: none;'>GitHub</a>
     </div>
     """,
     unsafe_allow_html=True

@@ -68,24 +68,34 @@ def sanitize_invalid_tags_in_markup(text: str):
     # <(/)?(tagname)( attributes)?> 형태 매칭
     return re.sub(r"<(/)?([a-zA-Z0-9]+)([^>]*)>", repl, text)
 
-def upgrade_to_html5(text: str):
-    """XHTML 1.1 등을 EPUB 3 권장 XHTML 5 규격으로 정밀 변환"""
+def upgrade_to_html5(text: str, target_version: str = "3.0"):
+    """XHTML 1.1 등을 EPUB 규격(2.0 또는 3.0)에 맞춰 정밀 변환"""
     # 0. BOM(Byte Order Mark) 제거
     if text.startswith('\ufeff'):
         text = text[1:]
 
-    # 1. XML 선언 제거 (일부 뷰어 및 구글 북스 업로드 시 호환성 문제 해결)
-    text = re.sub(r'<\?xml[^>]*\?>', '', text)
+    # 1. XML 선언 및 DOCTYPE 처리
+    if target_version == "2.0":
+        # EPUB 2.0/구형 리더기는 XML 선언부를 명시적으로 요구하는 경우가 많음
+        if not re.search(r'<\?xml[^>]*\?>', text):
+            text = '<?xml version="1.0" encoding="utf-8"?>\n' + text
+        # DOCTYPE을 XHTML 1.1로 유지 또는 교체
+        if not re.search(r'<!DOCTYPE [^>]+>', text, flags=re.I):
+            text = text.replace('?>', '?>\n<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">', 1)
+    else:
+        # EPUB 3.0 (HTML5) - XML 선언 제거 (권장) 및 DOCTYPE 단순화
+        text = re.sub(r'<\?xml[^>]*\?>', '', text)
+        text = re.sub(r'<!DOCTYPE [^>]+>', '<!DOCTYPE html>', text, flags=re.I)
     
-    # 2. DOCTYPE을 HTML5로 교체
-    text = re.sub(r'<!DOCTYPE [^>]+>', '<!DOCTYPE html>', text, flags=re.I)
-    
-    # 3. html 태그 특성 정규화 (EPUB 3 규격 필수)
+    # 3. html 태그 특성 정규화
     if '<html' in text:
-        # epub 네임스페이스 추가
+        # epub 네임스페이스 추가 (EPUB 3 필수, 2에서도 무해)
         if 'xmlns:epub' not in text:
             text = text.replace('<html', '<html xmlns:epub="http://www.idpf.org/2007/ops"', 1)
-        # 언어 설정 동기화 (lang과 xml:lang 모두 존재해야 함)
+        # 기본 네임스페이스 확인
+        if 'xmlns="http://www.w3.org/1999/xhtml"' not in text:
+            text = text.replace('<html', '<html xmlns="http://www.w3.org/1999/xhtml"', 1)
+        # 언어 설정 동기화
         if ' lang="ko"' not in text:
             text = text.replace('<html', '<html lang="ko"', 1)
         if ' xml:lang="ko"' not in text:

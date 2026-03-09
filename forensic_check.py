@@ -6,7 +6,7 @@ from modules.repairer import EPUBRepairer
 
 def forensic_check():
     repairer = EPUBRepairer()
-    input_path = Path("/Users/chuyouuwoo/Documents/GitHub/EPUB-Auto-Repair-Tool/private/output.epub")
+    input_path = Path(__file__).parent / "private" / "output.epub"
     if not input_path.exists():
         print("Input file not found")
         return
@@ -25,7 +25,7 @@ def forensic_check():
     
     out_buffer, changed, notes = repairer.process_buffer(buffer, "repair_test.epub")
     
-    output_path = Path("/Users/chuyouuwoo/Documents/GitHub/EPUB-Auto-Repair-Tool/private/forensic_repaired.epub")
+    output_path = Path(__file__).parent / "private" / "forensic_repaired.epub"
     output_path.write_bytes(out_buffer.getvalue())
 
     print(f"\n--- Repaired File: {output_path.name} ---")

@@ -1,6 +1,6 @@
 # 💎 EPUB Master
 
-**수리부터 변환까지, 당신의 완벽한 EPUB 솔루션**
+**제작과 epub 복구 통합 EPUB 솔루션**
 
 `EPUB Master`는 손상된 EPUB 파일을 복구하고, 일반 텍스트(TXT) 파일을 고품질 정체 EPUB으로 변환하는 올인원 도구입니다. 
 

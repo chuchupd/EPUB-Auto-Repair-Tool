@@ -8,7 +8,8 @@ import requests
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 from .core import (
-    create_epub, XML_NAMESPACES, create_nav_xhtml, upgrade_to_html5
+    create_epub, XML_NAMESPACES, create_nav_xhtml, upgrade_to_html5,
+    ensure_container_xml, write_text
 )
 
 class TXTToEPUBConverter:
@@ -71,13 +72,13 @@ class TXTToEPUBConverter:
             print(f"  - 표지 검색 중 오류: {e}")
         return None
 
-    def to_epub(self, text, metadata, cover_url=None, cover_bytes=None, log_fn=None):
+    def to_epub(self, text, metadata, cover_url=None, cover_bytes=None, version="3.0", log_fn=None):
         """TXT를 EPUB으로 변환 (메모리 버퍼 반환)"""
         def log(msg):
             if log_fn: log_fn(msg)
             print(msg, flush=True)
 
-        log(f"\n[Convert] EPUB 변환 시작 (Ver 1.7 - Hybrid Compatibility) | 크기: {len(text)}자")
+        log(f"\n[Convert] EPUB 변환 시작 (v2.3.5 - Target: {version}) | 크기: {len(text)}자")
         output_buffer = io.BytesIO()
         book_id = f"urn:uuid:{uuid.uuid4()}"
         iso_now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -95,7 +96,7 @@ class TXTToEPUBConverter:
 h1, h2 { text-align: center; margin-top: 10%; }
 .chapter { page-break-before: always; }
 img { max-width: 100%; height: auto; }'''
-            (root / "OEBPS" / "style.css").write_text(css, encoding="utf-8")
+            write_text(root / "OEBPS" / "style.css", css)
 
             # 3. 본문 처리 및 XHTML 분할
             lines = text.splitlines()
@@ -126,8 +127,8 @@ img { max-width: 100%; height: auto; }'''
                 
                 content.append('</body></html>')
                 content_str = '\n'.join(content)
-                content_str = upgrade_to_html5(content_str)
-                (root / "OEBPS" / fname).write_text(content_str, encoding="utf-8")
+                content_str = upgrade_to_html5(content_str, target_version=version)
+                write_text(root / "OEBPS" / fname, content_str)
                 chapter_files.append({"label": f"Chapter {ch_idx}", "href": fname})
                 log(f"    ... {min(i+chunk_size, len(lines))}/{len(lines)} 라인 처리 중 ({fname})")
 
@@ -185,7 +186,7 @@ img { max-width: 100%; height: auto; }'''
 <text x="50%" y="40%" font-size="30" text-anchor="middle" fill="#333">{html.escape(metadata["title"])}</text>
 <text x="50%" y="50%" font-size="20" text-anchor="middle" fill="#666">{html.escape(metadata["author"])}</text>
 </svg>'''
-                    (root / "OEBPS" / "images" / "cover.svg").write_text(svg, encoding="utf-8")
+                    write_text(root / "OEBPS" / "images" / "cover.svg", svg)
 
             # cover.xhtml (Show image)
             log("  - 표지 페이지 (cover.xhtml) 생성 중...")
@@ -194,7 +195,7 @@ img { max-width: 100%; height: auto; }'''
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ko" lang="ko">
 <head><meta charset="utf-8" /><title>Cover</title><style>body {{ margin:0; padding:0; text-align:center; background-color:#eeeeee; }} img {{ max-width:100%; height:auto; display:block; margin:0 auto; }}</style></head>
 <body><div style="height:100vh; display:flex; align-items:center; justify-content:center;"><img src="images/cover.{cover_ext}" alt="Cover Image" /></div></body></html>'''
-            (root / "OEBPS" / "cover.xhtml").write_text(cover_xhtml, encoding="utf-8")
+            write_text(root / "OEBPS" / "cover.xhtml", cover_xhtml)
 
             # nav.xhtml (EPUB 3)
             log("  - EPUB 3 Navigation Document (nav.xhtml) 생성 중...")
@@ -212,13 +213,13 @@ img { max-width: 100%; height: auto; }'''
             for i, item in enumerate(chapter_files):
                 ncx.append(f'<navPoint id="navPoint-{i+1}" playOrder="{i+1}"><navLabel><text>{html.escape(item["label"])}</text></navLabel><content src="{item["href"]}"/></navPoint>')
             ncx.append('</navMap></ncx>')
-            (root / "OEBPS" / "toc.ncx").write_text('\n'.join(ncx), encoding="utf-8")
+            write_text(root / "OEBPS" / "toc.ncx", '\n'.join(ncx))
 
             # content.opf
             log("  - 마스터 설정 (content.opf) 생성 중...")
             opf = [
                 '<?xml version="1.0" encoding="utf-8"?>',
-                '<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="3.0">',
+                f'<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="{version}">',
                 '  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">',
                 f'    <dc:identifier id="bookid">{book_id}</dc:identifier>',
                 f'    <dc:title>{html.escape(metadata["title"])}</dc:title>',
@@ -238,9 +239,13 @@ img { max-width: 100%; height: auto; }'''
                 opf.append(f'    <item id="ch{i+1}" href="{item["href"]}" media-type="application/xhtml+xml"/>')
             
             m_type = "image/jpeg" if cover_ext == "jpg" else ("image/png" if cover_ext == "png" else "image/svg+xml")
-            opf.append(f'    <item id="cover-image" href="images/cover.{cover_ext}" media-type="{m_type}" properties="cover-image"/>')
+            m_type = "image/jpeg" if cover_ext == "jpg" else ("image/png" if cover_ext == "png" else "image/svg+xml")
+            opf.append(f'    <item id="cover-image" href="images/cover.{cover_ext}" media-type="{m_type}" properties="cover-image"/>' if version == "3.0" else f'    <item id="cover-image" href="images/cover.{cover_ext}" media-type="{m_type}"/>')
             opf.append('  </manifest>')
-            opf.append('  <spine toc="ncx">')
+            
+            # EPUB 2.0은 spine에 toc 속성 권장/필수
+            spine_tag = '<spine toc="ncx">' if version == "2.0" else '<spine>'
+            opf.append(f'  {spine_tag}')
             opf.append('    <itemref idref="cover-page"/>')
             for i in range(len(chapter_files)):
                 opf.append(f'    <itemref idref="ch{i+1}"/>')
@@ -249,7 +254,11 @@ img { max-width: 100%; height: auto; }'''
             opf.append('  </spine>')
             opf.append('  <guide><reference type="cover" title="Cover" href="cover.xhtml"/></guide>')
             opf.append('</package>')
-            (root / "OEBPS" / "content.opf").write_text('\n'.join(opf), encoding="utf-8")
+            write_text(root / "OEBPS" / "content.opf", '\n'.join(opf))
+
+            # 6. 필수 구조 (META-INF/container.xml) 생성
+            log("  - 구조 무결성 확보 (container.xml) 중...")
+            ensure_container_xml(root, "OEBPS/content.opf")
 
             # 5. EPUB 압축
             log("  - EPUB 압축 및 최종 버퍼 생성 중...")

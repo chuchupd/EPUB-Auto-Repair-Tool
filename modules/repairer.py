@@ -110,48 +110,50 @@ class EPUBRepairer:
         # 실제 구현에서는 더 복잡한 검증이 가능함
         return root
 
-    def upgrade_opf_to_v3(self, opf_path: Path):
-        """OPF 파일을 EPUB 3.0 규격으로 업그레이드"""
+    def migrate_opf_version(self, opf_path: Path, target_version: str = "3.0"):
+        """OPF 파일을 지정된 EPUB 규격으로 마이그레이션"""
         text = read_text_lossy(opf_path)
-        # 1. 버전 업데이트 (따옴표 및 공백 유연하게 대응)
-        text = re.sub(r'version\s*=\s*["\']2\.0["\']', 'version="3.0"', text)
         
-        # 2. 폰트 MIME 타입 현대화 (EPUB 3 규격: application/x-font-otf/ttf -> font/otf/ttf)
-        text = text.replace('application/x-font-ttf', 'font/ttf')
-        text = text.replace('application/x-font-otf', 'font/otf')
-        text = text.replace('application/vnd.ms-opentype', 'font/otf')
+        # 1. 버전 업데이트
+        text = re.sub(r'version\s*=\s*["\']\d+\.\d+["\']', f'version="{target_version}"', text)
         
-        # 3. dcterms:modified 메타데이터 추가
-        import datetime
-        iso_now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-        if 'dcterms:modified' not in text:
-            meta_tag = f'<meta property="dcterms:modified">{iso_now}</meta>'
-            text = re.sub(r'(<metadata[^>]*>)', r'\1\n    ' + meta_tag, text)
+        if target_version == "3.0":
+            # 폰트 MIME 타입 현대화
+            text = text.replace('application/x-font-ttf', 'font/ttf')
+            text = text.replace('application/x-font-otf', 'font/otf')
+            text = text.replace('application/vnd.ms-opentype', 'font/otf')
             
-        # 4. Google Books 호환성: 표지 이미지 속성(properties="cover-image") 추가
-        # <meta name="cover" content="ID"/> 에서 ID를 찾아 해당 item에 속성 추가
-        cover_match = re.search(r'<meta[^>]*name="cover"[^>]*content="([^"]+)"', text)
-        if cover_match:
-            cover_id = cover_match.group(1)
-            # 해당 ID를 가진 item 찾아서 properties="cover-image" 추가 (이미 있으면 무시)
-            item_pattern = f'(<item[^>]*id="{cover_id}"[^>]*href="[^"]+"[^>]*media-type="[^"]+")'
-            if f'id="{cover_id}"' in text and 'properties="cover-image"' not in text:
-                text = re.sub(item_pattern, r'\1 properties="cover-image"', text)
+            # dcterms:modified 추가
+            import datetime
+            iso_now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            if 'dcterms:modified' not in text:
+                meta_tag = f'<meta property="dcterms:modified">{iso_now}</meta>'
+                text = re.sub(r'(<metadata[^>]*>)', r'\1\n    ' + meta_tag, text)
+            
+            # Google Books 호환성: cover-image 속성
+            cover_match = re.search(r'<meta[^>]*name="cover"[^>]*content="([^"]+)"', text)
+            if cover_match:
+                cover_id = cover_match.group(1)
+                item_pattern = f'(<item[^>]*id="{cover_id}"[^>]*href="[^"]+"[^>]*media-type="[^"]+")'
+                if f'id="{cover_id}"' in text and 'properties="cover-image"' not in text:
+                    text = re.sub(item_pattern, r'\1 properties="cover-image"', text)
+            
+            # spine toc="ncx" 제거 (3.0 전용 모드)
+            text = re.sub(r'<spine toc=["\']ncx["\']', '<spine', text)
+        else:
+            # EPUB 2.0 (Legacy)
+            # spine toc="ncx" 보존 또는 추가
+            if 'toc="ncx"' not in text:
+                text = re.sub(r'<spine', '<spine toc="ncx"', text)
         
-        # 5. 빈 메타데이터 태그 및 레거시 항목 제거 (Google Books 검증 오류 방지)
+        # 공통: 빈 메타데이터 제거 및 opf:scheme 처리 (2.0에서도 비표준 속성은 최소화 권장)
         empty_tags = ["dc:subject", "dc:description", "dc:rights", "dc:source", "dc:publisher", "dc:type"]
         for tag in empty_tags:
             text = re.sub(f'<{tag}[^>]*>\s*</{tag}>', '', text)
             text = re.sub(f'<{tag}[^>]*/>', '', text)
             
-        # 6. opf:scheme 등 레거시 속성 제거 (EPUB 3.0에서는 meta property 권장)
-        text = re.sub(r'\s+opf:scheme=["\'][^"\']+["\']', '', text)
-        
-        # 7. spine toc="ncx" 속성 제거 (EPUB 3 전용 모드 시도)
-        text = re.sub(r'<spine toc=["\']ncx["\']', '<spine', text)
-        
-        # 8. 불필요한 메타데이터 제거 (PDFePub3 등)
-        text = re.sub(r'<meta[^>]*name="PDFePub3 version"[^>]*/>', '', text)
+        if target_version == "3.0":
+            text = re.sub(r'\s+opf:scheme=["\'][^"\']+["\']', '', text)
         
         write_text(opf_path, text)
         return True
@@ -199,13 +201,13 @@ class EPUBRepairer:
 
         return issues
 
-    def process_buffer(self, input_buffer, filename, log_fn=None):
+    def process_buffer(self, input_buffer, filename, target_version="3.0", log_fn=None):
         """EPUB 바이너리 버퍼를 받아 복구된 버퍼 반환"""
         def log(msg):
             if log_fn: log_fn(msg)
             print(msg, flush=True)
 
-        log(f"\n[Repair] EPUB 수리 시작: {filename}")
+        log(f"\n[Repair] EPUB 수리 시작: {filename} (Target: {target_version})")
         with tempfile.TemporaryDirectory(prefix="repair_") as tmp_dir:
             tmp_path = Path(tmp_dir)
             in_epub = tmp_path / "input.epub"
@@ -281,9 +283,9 @@ class EPUBRepairer:
                 processed_count: int = 0
                 for p in extract_to.rglob("*"):
                     if p.suffix.lower() in [".xhtml", ".html", ".htm"]:
-                        # 4-1. 내용 세정 (XHTML 5 표준화 및 레거시 속성 제거)
+                        # 4-1. 내용 세정 (버전별 레거시 속성 및 XML 선언 처리)
                         text = read_text_lossy(p)
-                        cleaned = upgrade_to_html5(text)
+                        cleaned = upgrade_to_html5(text, target_version=target_version)
                         
                         # 4-2. 확장자 변경 및 파일 이동
                         new_path = p.with_suffix(".xhtml")
@@ -312,10 +314,10 @@ class EPUBRepairer:
                 opf_text = re.sub(r'<item[^>]+media-type="font/[^"]+"[^>]*/>', '', opf_text)
                 opf_text = re.sub(r'<item[^>]+media-type="application/(vnd\.ms-opentype|x-font-ttf)"[^>]*/>', '', opf_text)
                 
-                # 4-2. EPUB 3.0 규격 업그레이드 (Google Books 대응)
-                log("  - EPUB 3.0 현대 표준으로 업그레이드 중...")
+                # 4-2. EPUB 규격 마이그레이션 (Google Books / Legacy 대응)
+                log(f"  - EPUB {target_version} 규격으로 마이그레이션 중...")
                 write_text(opf_path, opf_text) # 우선 확장자 저장
-                self.upgrade_opf_to_v3(opf_path)
+                self.migrate_opf_version(opf_path, target_version=target_version)
                 
                 # 4-3. nav.xhtml 생성 및 OPF 등록 (v2.2 Fix: 무조건 재생성하여 깨진 링크 수정)
                 for p in extract_to.rglob("nav.xhtml"): p.unlink()
