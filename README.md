@@ -8,10 +8,11 @@
 
 ## ✨ 핵심 기능
 
+- **Dual-Mode Selection (v2.3.5)**: EPUB 2.0(Legacy) 와 EPUB 3.0(Modern) 선택 기능 도입으로 국내 전 기종 호환성 확보
 - **EPUB 3.0 Modernization**: 구형 EPUB 2.0 파일을 최신 3.0 규격으로 자동 업그레이드 (Google Books 완벽 호환)
 - **Hybrid Navigation**: EPUB 3 `nav.xhtml`과 EPUB 2 `toc.ncx`를 동시 생성하여 모든 리더기 대응
 - **Nuclear Conversion**: 구글 북스 업로드 실패의 핵심인 비표준 속성(img width%), 커스텀 폰트 의존성, XML 선언부 전면 소거
-- **High-Fidelity Navigation**: NCX 및 XHTML 타이틀 분석을 통한  목차 라벨링 (`id0` 등 무의미한 라벨 자동 교정)
+- **High-Fidelity Navigation**: NCX 및 XHTML 타이틀 분석을 통한 목차 라벨링 (`id0` 등 무의미한 라벨 자동 교정)
 - **Standard Compliance**: 전 파일 Unix LF 및 BOM-free 강제로 최신 이북 파서와의 무결성 확보
 - **Pure ZIP Optimization**: `mimetype` 전면 배치 및 가비지 필터링으로 업로드 무결성 확보
 - **Rich AI Interface**: Streamlit 기반의  직관적인 UI/UX
@@ -19,8 +20,8 @@
 ### ✍️ TXT to EPUB (변환 생성 엔진)
 - **스마트 분석**: 텍스트를 분석하여 제목, 저자, 챕터를 자동으로 추출합니다.
 - **표지 자동 검색**: Google Books 및 Open Library API를 연동하여 도서 정보를 찾고 표지를 매칭합니다.
-- **하이브리드 호환성**: 구글 북스 및 다양한 이북 리더기를 위해 최적화된 JPEG 표지와 가이드 태그를 생성합니다.
-- **고음질 생성**: 5,000라인 단위 분할 및  CSS 스타일링을 적용합니다.
+- **하이브리드 호환성**: EPUB 2.0(국내 뷰어 호환용) 및 EPUB 3.0(구글 북스 업로드용) 맞춤형 구조를 지원합니다.
+- **고품질 생성**: 5,000라인 단위 분할 및 CSS 스타일링을 적용합니다.
 
 ---
 
@@ -46,7 +47,9 @@ python3 fix_epub.py [대상파일/폴더]
 
 ---
 
-## 🍱 아키텍처 (v2.3 Master)
+## 🍱 아키텍처 (v2.3.5 Master)
+- **[2026-03-09] v2.3.5 (Dual-Mode)**: EPUB 2.0 & 3.0 선택 기능 도입 및 UI UX 최적화
+- **[2026-03-09] v2.3.1 (Hotfix)**: 국내 이북 리더기 `container.xml` 호환성 긴급 패치
 - **[2026-03-09] v2.3 (Forensic)**: 구글 북스 최종 승인을 위한 세부적인 기능 체크
 - **[2026-03-08] v2.2 (Standard Upgrade)**: Google Books 호환성을 위한 EPUB 3.0 내부 정밀 체크 (폰트 MIME, Spine 구조 개선)
 - **[2026-03-08] v2.1 (Master Repair)**: 진단 리포트 기능 추가
